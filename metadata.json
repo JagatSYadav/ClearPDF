@@ -1,0 +1,6 @@
+{
+  "name": "ClearPDF",
+  "description": "An offline PDF and document companion to open, edit, annotate, scan, and convert documents.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -29,6 +29,8 @@ import com.chethan616.clearpdf.ui.screen.EncryptPdfScreen
 import com.chethan616.clearpdf.ui.screen.ExtractTextScreen
 import com.chethan616.clearpdf.ui.screen.ImagesToPdfScreen
 import com.chethan616.clearpdf.ui.screen.HomeScreen
+import com.chethan616.clearpdf.ui.screen.IdCardComposerScreen
+import com.chethan616.clearpdf.ui.screen.QrStudioScreen
 import com.chethan616.clearpdf.ui.screen.MergePdfScreen
 import com.chethan616.clearpdf.ui.screen.OnboardingScreen
 import com.chethan616.clearpdf.ui.screen.SpreadsheetViewerScreen
@@ -77,6 +79,8 @@ private const val ROUTE_HOME = "home"
 private const val ROUTE_TOOLS = "tools"
 private const val ROUTE_SETTINGS = "settings"
 private const val ROUTE_SCAN = "scan_document"
+private const val ROUTE_ID_CARD = "id_card_composer"
+private const val ROUTE_QR_STUDIO = "qr_studio"
 private const val ROUTE_VIEWER_BASE = "pdf_viewer"
 private const val ROUTE_MERGE = "merge_pdf"
 private const val ROUTE_SPLIT = "split_pdf"
@@ -358,6 +362,15 @@ fun DocsNavGraph(
                 onNavigateToScan = {
                     navController.navigate(ROUTE_SCAN) { launchSingleTop = true }
                 },
+                onNavigateToIdCard = {
+                    navController.navigate(ROUTE_ID_CARD) { launchSingleTop = true }
+                },
+                onNavigateToCompressPdf = {
+                    navController.navigate(ROUTE_COMPRESS) { launchSingleTop = true }
+                },
+                onNavigateToQrStudio = {
+                    navController.navigate(ROUTE_QR_STUDIO) { launchSingleTop = true }
+                },
                 onRecentFileSelected = { uri, name ->
                     // Route by document kind: spreadsheets open in the interactive grid viewer,
                     // everything else in the PDF viewer. The name comes from the recents entry
@@ -386,6 +399,8 @@ fun DocsNavGraph(
                 onNavigateToPageNumbers = { navController.navigate(ROUTE_PAGE_NUMBERS) { launchSingleTop = true } },
                 onNavigateToFlatten = { navController.navigate(ROUTE_FLATTEN) { launchSingleTop = true } },
                 onNavigateToImageTools = { navController.navigate(ROUTE_IMAGE_TOOLS) { launchSingleTop = true } },
+                onNavigateToIdCard = { navController.navigate(ROUTE_ID_CARD) { launchSingleTop = true } },
+                onNavigateToQrStudio = { navController.navigate(ROUTE_QR_STUDIO) { launchSingleTop = true } },
                 onNavigateToHtmlToPdf = { navController.navigate(ROUTE_HTML_TO_PDF) { launchSingleTop = true } },
                 onNavigateToFillForm = { navController.navigate(ROUTE_FILL_FORM) { launchSingleTop = true } }
             )
@@ -422,6 +437,23 @@ fun DocsNavGraph(
                 backdrop = backdrop,
                 viewModel = vm,
                 onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(ROUTE_ID_CARD) {
+            IdCardComposerScreen(
+                backdrop = backdrop,
+                onNavigateBack = { navController.popBackStack() },
+                onPdfGenerated = { uri, _ ->
+                    navController.navigateToPdfViewer(uri)
+                }
+            )
+        }
+
+        composable(ROUTE_QR_STUDIO) {
+            QrStudioScreen(
+                backdrop = backdrop,
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
@@ -500,7 +532,10 @@ fun DocsNavGraph(
                 viewModel = vm,
                 onBack = { navController.popBackStack() },
                 pendingLoad = hasPendingDoc,
-                onOpenOfficeEngineSettings = { navController.navigate(ROUTE_SETTINGS) { launchSingleTop = true } }
+                onOpenOfficeEngineSettings = { navController.navigate(ROUTE_SETTINGS) { launchSingleTop = true } },
+                onNavigateToCompressPdf = { uri ->
+                    navController.navigate("$ROUTE_COMPRESS?$ARG_PDF_URI=${Uri.encode(uri.toString())}") { launchSingleTop = true }
+                }
             )
         }
 
@@ -606,7 +641,17 @@ fun DocsNavGraph(
             )
         }
 
-        composable(ROUTE_COMPRESS) {
+        composable(
+            route = "$ROUTE_COMPRESS?$ARG_PDF_URI={$ARG_PDF_URI}",
+            arguments = listOf(
+                navArgument(ARG_PDF_URI) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { backStackEntry ->
+            val initialUri = backStackEntry.arguments?.getString(ARG_PDF_URI)?.let { parseViewerUriArg(it) }
             val vm: CompressPdfViewModel = viewModel(
                 factory = object : ViewModelProvider.Factory {
                     @Suppress("UNCHECKED_CAST")
@@ -617,6 +662,7 @@ fun DocsNavGraph(
             CompressPdfScreen(
                 backdrop = backdrop,
                 viewModel = vm,
+                initialUri = initialUri,
                 onBack = { navController.popBackStack() },
                 onViewOutput = { uri -> navController.navigateToPdfViewer(uri) }
             )

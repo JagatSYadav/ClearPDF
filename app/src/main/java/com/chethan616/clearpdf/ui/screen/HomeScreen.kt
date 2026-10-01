@@ -47,6 +47,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.DeleteForever
+import androidx.compose.material.icons.rounded.Badge
+import androidx.compose.material.icons.rounded.Compress
+import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.RemoveCircleOutline
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
@@ -132,6 +135,9 @@ fun HomeScreen(
     backdrop: LayerBackdrop,
     onNavigateToOpenPdf: () -> Unit,
     onNavigateToScan: () -> Unit,
+    onNavigateToIdCard: () -> Unit = {},
+    onNavigateToCompressPdf: () -> Unit = {},
+    onNavigateToQrStudio: () -> Unit = {},
     // The stored display name travels with the uri. Re-querying DISPLAY_NAME at tap time is a
     // guess that fails exactly when it matters: a lapsed permission or a provider that answers with
     // its own internal name sends a .docx down the plain-PDF route. Recents already knows what the
@@ -325,6 +331,168 @@ fun HomeScreen(
                                 ) {
                                     Icon(Icons.Rounded.Scanner, null, Modifier.size(18.dp), Color.White)
                                     BasicText(stringResource(R.string.home_scan), style = TextStyle(Color.White, 14.sp, FontWeight.SemiBold))
+                                }
+                            }
+                        }
+
+                        // Prominent ID Card Scan Button
+                        LiquidButton(
+                            onClick = onNavigateToIdCard,
+                            backdrop = backdrop,
+                            tint = LiquidGlassColors.Indigo,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 3.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        Modifier
+                                            .size(34.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color.White.copy(alpha = 0.22f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Icons.Rounded.Badge, null, Modifier.size(20.dp), Color.White)
+                                    }
+                                    Column {
+                                        BasicText(
+                                            stringResource(R.string.home_id_card_scan),
+                                            style = TextStyle(Color.White, 14.sp, FontWeight.Bold)
+                                        )
+                                        BasicText(
+                                            "Side-by-side A4 layout for print & lamination",
+                                            style = TextStyle(Color.White.copy(alpha = 0.85f), 11.sp, FontWeight.Normal)
+                                        )
+                                    }
+                                }
+                                Box(
+                                    Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Color.White.copy(alpha = 0.20f))
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    BasicText(
+                                        "A4 Print",
+                                        style = TextStyle(Color.White, 11.sp, FontWeight.SemiBold)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Prominent PDF Compressor Button
+                        LiquidButton(
+                            onClick = onNavigateToCompressPdf,
+                            backdrop = backdrop,
+                            tint = LiquidGlassColors.Green,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 3.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        Modifier
+                                            .size(34.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color.White.copy(alpha = 0.22f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Icons.Rounded.Compress, null, Modifier.size(20.dp), Color.White)
+                                    }
+                                    Column {
+                                        BasicText(
+                                            "Compress PDF",
+                                            style = TextStyle(Color.White, 14.sp, FontWeight.Bold)
+                                        )
+                                        BasicText(
+                                            "Target 100/200/500 KB or custom quality",
+                                            style = TextStyle(Color.White.copy(alpha = 0.85f), 11.sp, FontWeight.Normal)
+                                        )
+                                    }
+                                }
+                                Box(
+                                    Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Color.White.copy(alpha = 0.20f))
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    BasicText(
+                                        "Reduce Size",
+                                        style = TextStyle(Color.White, 11.sp, FontWeight.SemiBold)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Prominent QR Studio Button
+                        LiquidButton(
+                            onClick = onNavigateToQrStudio,
+                            backdrop = backdrop,
+                            tint = LiquidGlassColors.Orange,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 3.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        Modifier
+                                            .size(34.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color.White.copy(alpha = 0.22f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Icons.Rounded.QrCodeScanner, null, Modifier.size(20.dp), Color.White)
+                                    }
+                                    Column {
+                                        BasicText(
+                                            stringResource(R.string.home_qr_studio),
+                                            style = TextStyle(Color.White, 14.sp, FontWeight.Bold)
+                                        )
+                                        BasicText(
+                                            stringResource(R.string.home_qr_studio_sub),
+                                            style = TextStyle(Color.White.copy(alpha = 0.85f), 11.sp, FontWeight.Normal)
+                                        )
+                                    }
+                                }
+                                Box(
+                                    Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Color.White.copy(alpha = 0.20f))
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    BasicText(
+                                        "Scan & Create",
+                                        style = TextStyle(Color.White, 11.sp, FontWeight.SemiBold)
+                                    )
                                 }
                             }
                         }

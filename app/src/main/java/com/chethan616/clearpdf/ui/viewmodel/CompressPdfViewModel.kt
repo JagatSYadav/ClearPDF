@@ -1,190 +1,367 @@
 package com.chethan616.clearpdf.ui.viewmodel
 
-import android.content.Intent
-import android.content.ContentValues
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.graphics.Matrix
+import android.graphics.RectF
+import android.graphics.pdf.PdfDocument
+import android.graphics.pdf.PdfRenderer
 import android.net.Uri
-import android.os.Build
-import android.os.Environment
-import android.provider.MediaStore
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.chethan616.clearpdf.data.repository.AppSettingsManager
+import com.chethan616.clearpdf.R
 import com.chethan616.clearpdf.data.repository.GitHubStarPromptManager
+import com.chethan616.clearpdf.data.repository.LocalDocumentMirror
 import com.chethan616.clearpdf.data.repository.RecentFile
 import com.chethan616.clearpdf.data.repository.RecentFilesManager
-import com.chethan616.clearpdf.data.repository.SaveLocationManager
-import com.chethan616.clearpdf.R
 import com.chethan616.clearpdf.domain.usecase.CompressPdfUseCase
-import com.chethan616.clearpdf.ui.utils.StarPromptEventBus
-import com.kyant.pdfcore.model.CompressionQuality
-import com.kyant.pdfcore.model.PdfDocument
 import com.chethan616.clearpdf.ui.utils.AppDispatchers
+import com.chethan616.clearpdf.ui.utils.StarPromptEventBus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.min
+
+enum class CompressionPreset(val label: String, val subtitle: String, val targetBytes: Long?) {
+    TARGET_100KB("Target 100 KB", "High compression for government portals", 100 * 1024L),
+    TARGET_200KB("Target 200 KB", "Standard web form size", 200 * 1024L),
+    TARGET_500KB("Target 500 KB", "Balanced document quality", 500 * 1024L),
+    CUSTOM_QUALITY("Custom Quality", "Select 10% to 90% JPEG quality", null)
+}
 
 data class CompressPdfUiState(
     val sourceFileName: String = "",
     val sourceUri: Uri? = null,
     val originalSizeBytes: Long = 0,
-    val selectedQuality: CompressionQuality = CompressionQuality.MEDIUM,
-    val qualitySlider: Float = 0.5f,
+    val pageCount: Int = 0,
+    val selectedPreset: CompressionPreset = CompressionPreset.TARGET_200KB,
+    val customSliderQuality: Float = 0.60f,
     val estimatedSizeBytes: Long = -1,
     val isCompressing: Boolean = false,
+    val compressionProgressText: String = "",
     val resultMessage: String? = null,
     val errorMessage: String? = null,
     val compressedSizeBytes: Long = -1,
     val lastOutputUri: Uri? = null,
-    val saveLocationLabel: String = "Downloads (default)"
+    val lastOutputFile: File? = null,
+    val recentPdfs: List<RecentFile> = emptyList()
 )
 
-class CompressPdfViewModel(private val compressPdfUseCase: CompressPdfUseCase) : ViewModel() {
+class CompressPdfViewModel(
+    @Suppress("UNUSED_PARAMETER") private val compressPdfUseCase: CompressPdfUseCase
+) : ViewModel() {
+
     private val _uiState = MutableStateFlow(CompressPdfUiState())
     val uiState: StateFlow<CompressPdfUiState> = _uiState.asStateFlow()
+
+    fun loadRecentPdfs(context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val recents = RecentFilesManager.getRecents(context)
+                .filter { it.name.endsWith(".pdf", ignoreCase = true) }
+            _uiState.value = _uiState.value.copy(recentPdfs = recents)
+        }
+    }
 
     fun onSelectFile(context: Context, uri: Uri) {
         viewModelScope.launch {
             try {
-                // Honor the user's Default Quality setting instead of always starting on MEDIUM.
-                // Mapped with the same thresholds the slider uses (see onQualitySliderChanged), and
-                // the slider seeds to the raw stored value so its knob lands where the user set it.
-                val defaultQuality = AppSettingsManager.getDefaultQuality(context)
-                val quality = when {
-                    defaultQuality < 0.33f -> CompressionQuality.LOW
-                    defaultQuality < 0.66f -> CompressionQuality.MEDIUM
-                    else -> CompressionQuality.HIGH
-                }
-                val (name, size, estimate) = withContext(AppDispatchers.pdf) {
+                withContext(AppDispatchers.pdf) {
                     try {
                         context.contentResolver.takePersistableUriPermission(
-                            uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
                         )
                     } catch (_: Exception) {}
-                    val fileName = queryFileName(context, uri) ?: "Unknown.pdf"
-                    val fileSize = context.contentResolver.openFileDescriptor(uri, "r")
-                        ?.use { it.statSize } ?: -1L
-                    val source = PdfDocument(uri = uri, name = fileName, sizeBytes = fileSize)
-                    val est = compressPdfUseCase.estimateSize(source, quality)
-                    Triple(fileName, fileSize, est)
                 }
-                _uiState.value = CompressPdfUiState(
-                    sourceFileName = name,
+
+                val fileName = queryFileName(context, uri) ?: "Selected.pdf"
+                var fileSize = queryFileSize(context, uri)
+                var pages = 0
+
+                withContext(Dispatchers.IO) {
+                    try {
+                        context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                            if (fileSize <= 0) {
+                                fileSize = pfd.statSize
+                            }
+                            PdfRenderer(pfd).use { renderer ->
+                                pages = renderer.pageCount
+                            }
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+
+                _uiState.value = _uiState.value.copy(
+                    sourceFileName = fileName,
                     sourceUri = uri,
-                    originalSizeBytes = size,
-                    selectedQuality = quality,
-                    qualitySlider = defaultQuality,
-                    estimatedSizeBytes = estimate
+                    originalSizeBytes = fileSize.coerceAtLeast(0L),
+                    pageCount = pages.coerceAtLeast(1),
+                    errorMessage = null,
+                    resultMessage = null,
+                    lastOutputUri = null,
+                    compressedSizeBytes = -1
                 )
+
+                updateEstimate()
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(errorMessage = context.getString(R.string.open_pdf_failed))
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = context.getString(R.string.open_pdf_failed)
+                )
             }
         }
     }
 
-    fun onQualityChanged(quality: CompressionQuality) {
-        val slider = when (quality) {
-            CompressionQuality.LOW -> 0.15f
-            CompressionQuality.MEDIUM -> 0.5f
-            CompressionQuality.HIGH -> 0.85f
-        }
-        val sourceUri = _uiState.value.sourceUri
-        val estimate = if (sourceUri != null) {
-            compressPdfUseCase.estimateSize(
-                source = PdfDocument(
-                    uri = sourceUri,
-                    name = _uiState.value.sourceFileName,
-                    sizeBytes = _uiState.value.originalSizeBytes
-                ),
-                quality = quality
-            )
-        } else {
-            -1
-        }
-        _uiState.value = _uiState.value.copy(
-            selectedQuality = quality,
-            qualitySlider = slider,
-            estimatedSizeBytes = estimate
-        )
+    fun onPresetChanged(preset: CompressionPreset) {
+        _uiState.value = _uiState.value.copy(selectedPreset = preset)
+        updateEstimate()
     }
 
     fun onQualitySliderChanged(value: Float) {
-        val current = _uiState.value
-        val quality = when {
-            value < 0.33f -> CompressionQuality.LOW
-            value < 0.66f -> CompressionQuality.MEDIUM
-            else -> CompressionQuality.HIGH
-        }
-        val sourceUri = current.sourceUri
-        _uiState.value = current.copy(
-            qualitySlider = value,
-            selectedQuality = quality
+        val clamped = value.coerceIn(0.10f, 0.90f)
+        _uiState.value = _uiState.value.copy(
+            customSliderQuality = clamped,
+            selectedPreset = CompressionPreset.CUSTOM_QUALITY
         )
-        if (quality != current.selectedQuality && sourceUri != null) {
-            viewModelScope.launch(Dispatchers.IO) {
-                try {
-                    val estimate = compressPdfUseCase.estimateSize(
-                        source = PdfDocument(
-                            uri = sourceUri,
-                            name = current.sourceFileName,
-                            sizeBytes = current.originalSizeBytes
-                        ),
-                        quality = quality
-                    )
-                    _uiState.value = _uiState.value.copy(estimatedSizeBytes = estimate)
-                } catch (_: Exception) {}
+        updateEstimate()
+    }
+
+    private fun updateEstimate() {
+        val current = _uiState.value
+        val orig = current.originalSizeBytes
+        val pages = current.pageCount.coerceAtLeast(1)
+        if (orig <= 0) {
+            _uiState.value = current.copy(estimatedSizeBytes = -1)
+            return
+        }
+
+        val estimated: Long = when (current.selectedPreset) {
+            CompressionPreset.TARGET_100KB -> {
+                val target = 100 * 1024L
+                if (orig < target) min(orig, (orig * 0.85f).toLong()) else (target * 0.95f).toLong()
+            }
+            CompressionPreset.TARGET_200KB -> {
+                val target = 200 * 1024L
+                if (orig < target) min(orig, (orig * 0.88f).toLong()) else (target * 0.95f).toLong()
+            }
+            CompressionPreset.TARGET_500KB -> {
+                val target = 500 * 1024L
+                if (orig < target) min(orig, (orig * 0.90f).toLong()) else (target * 0.95f).toLong()
+            }
+            CompressionPreset.CUSTOM_QUALITY -> {
+                val q = current.customSliderQuality
+                val perPageEstimate = (40_000L + (q * 160_000L).toLong())
+                val totalEstimated = perPageEstimate * pages
+                min(orig, (totalEstimated * 0.90f).toLong()).coerceAtLeast(20_000L)
             }
         }
+
+        _uiState.value = current.copy(estimatedSizeBytes = estimated)
     }
 
     fun onCompress(context: Context) {
         val srcUri = _uiState.value.sourceUri ?: return
-        _uiState.value = _uiState.value.copy(isCompressing = true, errorMessage = null, resultMessage = null, lastOutputUri = null)
+        val origSize = _uiState.value.originalSizeBytes
+        val preset = _uiState.value.selectedPreset
+        val customQuality = _uiState.value.customSliderQuality
+
+        _uiState.value = _uiState.value.copy(
+            isCompressing = true,
+            compressionProgressText = "Preparing document...",
+            errorMessage = null,
+            resultMessage = null,
+            lastOutputUri = null,
+            compressedSizeBytes = -1
+        )
+
         viewModelScope.launch {
             try {
-                val saveLabel = SaveLocationManager.getSavePathDisplay(context)
-                val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-                val fileName = "ClearPDF_Compressed_$ts.pdf"
-                val outUri = createOutputUri(context, fileName)
-                val source = PdfDocument(uri = srcUri, name = _uiState.value.sourceFileName, sizeBytes = _uiState.value.originalSizeBytes)
                 val result = withContext(Dispatchers.IO) {
-                    compressPdfUseCase.compress(context, source, _uiState.value.selectedQuality, outUri)
+                    performCompression(context, srcUri, origSize, preset, customQuality)
                 }
 
-                RecentFilesManager.addRecent(context, RecentFile(
-                    name = fileName, uriString = outUri.toString(),
-                    timestamp = System.currentTimeMillis(), sizeBytes = result.sizeBytes
-                ))
-
-                val origKb = _uiState.value.originalSizeBytes / 1024
-                val compKb = result.sizeBytes / 1024
-                val reduction = if (_uiState.value.originalSizeBytes > 0)
-                    (100 - (result.sizeBytes * 100 / _uiState.value.originalSizeBytes)).toInt()
-                else 0
+                val origKb = origSize / 1024
+                val compKb = result.fileSize / 1024
+                val reduction = if (origSize > 0) {
+                    ((origSize - result.fileSize).toFloat() / origSize * 100).toInt().coerceIn(0, 99)
+                } else 0
 
                 _uiState.value = _uiState.value.copy(
                     isCompressing = false,
-                    compressedSizeBytes = result.sizeBytes,
-                    lastOutputUri = outUri,
-                    saveLocationLabel = saveLabel,
-                    resultMessage = context.getString(R.string.compression_success, origKb, compKb, reduction, saveLabel)
+                    compressionProgressText = "",
+                    compressedSizeBytes = result.fileSize,
+                    lastOutputUri = result.uri,
+                    lastOutputFile = result.file,
+                    resultMessage = "Compressed: ${origKb}KB -> ${compKb}KB ($reduction% smaller)"
                 )
 
                 if (GitHubStarPromptManager.recordPdfInteraction(context)) {
                     StarPromptEventBus.requestPrompt()
                 }
             } catch (e: Exception) {
+                e.printStackTrace()
                 _uiState.value = _uiState.value.copy(
                     isCompressing = false,
-                    errorMessage = context.getString(R.string.compression_failed)
+                    compressionProgressText = "",
+                    errorMessage = e.localizedMessage ?: context.getString(R.string.compression_failed)
                 )
+            }
+        }
+    }
+
+    private data class CompressionResult(val uri: Uri, val file: File, val fileSize: Long)
+
+    private fun performCompression(
+        context: Context,
+        srcUri: Uri,
+        origSize: Long,
+        preset: CompressionPreset,
+        customQuality: Float
+    ): CompressionResult {
+        val pfd = context.contentResolver.openFileDescriptor(srcUri, "r")
+            ?: throw IllegalArgumentException("Cannot open source PDF")
+
+        pfd.use { fd ->
+            val renderer = PdfRenderer(fd)
+            val pageCount = renderer.pageCount
+            val outDoc = PdfDocument()
+
+            // Calculate scale and quality based on settings
+            val targetBytes = preset.targetBytes
+            val (scaleFactor, jpegQuality) = if (targetBytes != null) {
+                val pageBudget = (targetBytes * 0.90f) / pageCount.coerceAtLeast(1)
+                when {
+                    pageBudget < 25_000 -> Pair(0.45f, 32)
+                    pageBudget < 50_000 -> Pair(0.55f, 44)
+                    pageBudget < 100_000 -> Pair(0.68f, 58)
+                    pageBudget < 200_000 -> Pair(0.80f, 70)
+                    else -> Pair(0.92f, 82)
+                }
+            } else {
+                val q = (customQuality * 100).toInt().coerceIn(10, 90)
+                val s = (0.40f + (customQuality - 0.10f) * 0.70f).coerceIn(0.40f, 0.95f)
+                Pair(s, q)
+            }
+
+            val matrix = Matrix()
+            val stream = ByteArrayOutputStream(256 * 1024)
+            var reusableBitmap: Bitmap? = null
+
+            try {
+                for (i in 0 until pageCount) {
+                    _uiState.value = _uiState.value.copy(
+                        compressionProgressText = "Compressing page ${i + 1} of $pageCount..."
+                    )
+
+                    val srcPage = renderer.openPage(i)
+                    try {
+                        val origW = srcPage.width
+                        val origH = srcPage.height
+
+                        // Calculate scaled dimensions and prevent OOM
+                        var w = (origW * scaleFactor).toInt().coerceAtLeast(1)
+                        var h = (origH * scaleFactor).toInt().coerceAtLeast(1)
+                        val maxDim = 1800
+                        if (w > maxDim || h > maxDim) {
+                            val downscale = maxDim.toFloat() / maxOf(w, h)
+                            w = (w * downscale).toInt().coerceAtLeast(1)
+                            h = (h * downscale).toInt().coerceAtLeast(1)
+                        }
+
+                        val actualScaleX = w.toFloat() / origW
+                        val actualScaleY = h.toFloat() / origH
+
+                        val workingBitmap = if (reusableBitmap != null && !reusableBitmap.isRecycled &&
+                            reusableBitmap.width == w && reusableBitmap.height == h
+                        ) {
+                            reusableBitmap
+                        } else {
+                            reusableBitmap?.recycle()
+                            Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).also {
+                                reusableBitmap = it
+                            }
+                        }
+
+                        workingBitmap.eraseColor(Color.WHITE)
+                        matrix.reset()
+                        matrix.setScale(actualScaleX, actualScaleY)
+
+                        srcPage.render(
+                            workingBitmap,
+                            null,
+                            matrix,
+                            PdfRenderer.Page.RENDER_MODE_FOR_PRINT
+                        )
+
+                        // Compress rendered page bitmap into JPEG format
+                        stream.reset()
+                        workingBitmap.compress(Bitmap.CompressFormat.JPEG, jpegQuality, stream)
+                        val compressedBytes = stream.toByteArray()
+
+                        val compressedBitmap = android.graphics.BitmapFactory.decodeByteArray(
+                            compressedBytes,
+                            0,
+                            compressedBytes.size
+                        ) ?: throw IllegalStateException("Failed to decode compressed page ${i + 1}")
+
+                        val pageInfo = PdfDocument.PageInfo.Builder(origW, origH, i).create()
+                        val page = outDoc.startPage(pageInfo)
+                        val destRect = RectF(0f, 0f, origW.toFloat(), origH.toFloat())
+                        page.canvas.drawBitmap(compressedBitmap, null, destRect, null)
+                        outDoc.finishPage(page)
+                        compressedBitmap.recycle()
+                    } finally {
+                        srcPage.close()
+                    }
+                }
+
+                // Save directly into internal storage: context.filesDir/documents/
+                val docDir = File(context.filesDir, "documents").apply { mkdirs() }
+                val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+                val fileName = "COMPRESSED_$timeStamp.pdf"
+                val outputFile = File(docDir, fileName)
+
+                outputFile.outputStream().use { fos ->
+                    outDoc.writeTo(fos)
+                    fos.flush()
+                }
+
+                val outUri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.provider",
+                    outputFile
+                )
+
+                // Register into RecentFilesManager immediately
+                RecentFilesManager.addRecent(
+                    context,
+                    RecentFile(
+                        name = fileName,
+                        uriString = outUri.toString(),
+                        timestamp = System.currentTimeMillis(),
+                        pageCount = pageCount,
+                        sizeBytes = outputFile.length()
+                    )
+                )
+
+                LocalDocumentMirror.resolve(context, outUri, "pdf")
+
+                return CompressionResult(outUri, outputFile, outputFile.length())
+            } finally {
+                reusableBitmap?.recycle()
+                outDoc.close()
+                renderer.close()
             }
         }
     }
@@ -192,6 +369,7 @@ class CompressPdfViewModel(private val compressPdfUseCase: CompressPdfUseCase) :
     fun clearFeedback() {
         _uiState.value = _uiState.value.copy(resultMessage = null, errorMessage = null)
     }
+
     private fun queryFileName(context: Context, uri: Uri): String? {
         return try {
             context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
@@ -200,40 +378,16 @@ class CompressPdfViewModel(private val compressPdfUseCase: CompressPdfUseCase) :
                     if (idx >= 0) cursor.getString(idx) else null
                 } else null
             }
-        } catch (_: Exception) { null }
-    }
-
-    private fun createOutputUri(context: Context, fileName: String): Uri {
-        val customUri = SaveLocationManager.getSaveUri(context)
-        if (customUri != null) {
-            return try {
-                val docUri = androidx.documentfile.provider.DocumentFile.fromTreeUri(context, customUri)
-                val created = docUri?.createFile("application/pdf", fileName)?.uri
-                if (created != null) {
-                    created
-                } else {
-                    createDownloadUri(context, fileName)
-                }
-            } catch (_: Exception) { createDownloadUri(context, fileName) }
+        } catch (_: Exception) {
+            uri.lastPathSegment
         }
-        return createDownloadUri(context, fileName)
     }
 
-    private fun createDownloadUri(context: Context, fileName: String): Uri {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val cv = ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-                put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
-                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
-            }
-            context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv)
-                ?: throw IllegalStateException("Unable to create output in Downloads")
-        } else {
-            val dir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
-            if (!dir.exists()) dir.mkdirs()
-            val file = java.io.File(dir, fileName)
-            if (!file.exists()) file.createNewFile()
-            FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+    private fun queryFileSize(context: Context, uri: Uri): Long {
+        return try {
+            context.contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize } ?: -1L
+        } catch (_: Exception) {
+            -1L
         }
     }
 }

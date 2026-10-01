@@ -687,4 +687,49 @@
     <string name="sheet_read_only">This file can be viewed but not edited</string>
     <string name="sheet_invalid_value">That value isn\'t in this cell\'s list</string>
     <string name="office_engine_rendered">Rendered by Office engine</string>
+
+    <!-- ID Card Composer -->
+    <string name="home_id_card_scan">ID Card Scan</string>
+    <string name="id_card_composer_title">ID Card Composer</string>
+    <string name="id_card_composer_sub">Side-by-side A4 layout for direct printing &amp; lamination</string>
+    <string name="id_card_front_title">Front Side</string>
+    <string name="id_card_front_desc">Capture or pick front side of ID</string>
+    <string name="id_card_back_title">Back Side</string>
+    <string name="id_card_back_desc">Capture or pick back side of ID</string>
+    <string name="id_card_retake">Change</string>
+    <string name="id_card_remove">Remove</string>
+    <string name="id_card_camera">Camera</string>
+    <string name="id_card_gallery">Gallery</string>
+    <string name="id_card_generate_pdf">Generate A4 PDF</string>
+    <string name="id_card_generating">Composing A4 PDF…</string>
+    <string name="id_card_success">ID Card PDF generated successfully!</string>
+    <string name="id_card_error_both_required">Please add both front and back sides</string>
+    <string name="id_card_layout_note">Standard A4 portrait (595 × 842 pt) · Side-by-side cards (85.6 × 54 mm) · Equal margins &amp; baseline alignment</string>
+    <string name="id_card_preset_aadhaar">Aadhaar</string>
+    <string name="id_card_preset_pan">PAN Card</string>
+    <string name="id_card_preset_voter">Voter ID</string>
+    <string name="id_card_preset_license">License</string>
+    <string name="id_card_preset_custom">Other ID</string>
+
+    <!-- QR Studio -->
+    <string name="home_qr_studio">QR Studio</string>
+    <string name="home_qr_studio_sub">Scan &amp; Generate QR codes (UPI, URL, Wi-Fi)</string>
+    <string name="qr_studio_title">QR Studio</string>
+    <string name="qr_tab_scan">Scan QR</string>
+    <string name="qr_tab_create">Create QR</string>
+    <string name="qr_scan_prompt">Align QR code inside the viewfinder</string>
+    <string name="qr_permission_required">Camera Permission Required</string>
+    <string name="qr_permission_desc">Camera access is needed to scan QR codes and barcodes in real-time.</string>
+    <string name="qr_grant_permission">Grant Camera Access</string>
+    <string name="qr_copy_clipboard">Copy to Clipboard</string>
+    <string name="qr_copied_toast">Copied to clipboard!</string>
+    <string name="qr_open_browser">Open in Browser</string>
+    <string name="qr_pay_upi">Pay via UPI App</string>
+    <string name="qr_share">Share</string>
+    <string name="qr_scan_again">Scan Another</string>
+    <string name="qr_create_input_hint">Enter content to encode…</string>
+    <string name="qr_generate_btn">Generate QR Code</string>
+    <string name="qr_save_device">Save to Device</string>
+    <string name="qr_share_image">Share QR Image</string>
+    <string name="qr_saved_toast">QR Code saved to documents!</string>
 </resources>

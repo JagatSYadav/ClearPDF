@@ -62,6 +62,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.runtime.snapshotFlow
+import android.net.Uri
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.foundation.rememberScrollState
@@ -74,6 +75,7 @@ import androidx.compose.material.icons.Icons
 import com.chethan616.clearpdf.ui.theme.LiquidGlassColors
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.ArrowBackIosNew
+import androidx.compose.material.icons.rounded.Compress
 import androidx.compose.material.icons.rounded.PictureAsPdf
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.UploadFile
@@ -169,7 +171,8 @@ fun PdfViewerScreen(
     // it shows a loading curtain that the real document fades in behind. See [ViewerLoadingCurtain].
     pendingLoad: Boolean = false,
     // "Get it" on the Office engine hint: open Settings at the engine section to show progress.
-    onOpenOfficeEngineSettings: () -> Unit = {}
+    onOpenOfficeEngineSettings: () -> Unit = {},
+    onNavigateToCompressPdf: (Uri) -> Unit = {}
 ) {
     val state         by viewModel.uiState.collectAsState()
     val isDarkMode     = LocalIsDarkMode.current
@@ -1126,6 +1129,17 @@ fun PdfViewerScreen(
                         backdrop = contentBackdrop
                     ) {
                         Icon(Icons.Rounded.Search, stringResource(R.string.viewer_find), Modifier.size(20.dp), topFg)
+                    }
+                    LiquidIconButton(
+                        onClick = {
+                            val uri = state.document?.uri ?: state.originalUri
+                            if (uri != null) {
+                                onNavigateToCompressPdf(uri)
+                            }
+                        },
+                        backdrop = contentBackdrop
+                    ) {
+                        Icon(Icons.Rounded.Compress, "Compress PDF", Modifier.size(20.dp), topFg)
                     }
                 }
             }

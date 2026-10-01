@@ -35,7 +35,7 @@ android {
     buildToolsVersion = "36.1.0"
 
     defaultConfig {
-        applicationId = "com.chethan616.clearpdf"
+        applicationId = "com.aistudio.clearpdf.kpqzmt"
         minSdk = 23
         targetSdk = 36
         versionCode = 4
@@ -46,8 +46,11 @@ android {
     }
 
     signingConfigs {
-        getByName("debug") {
-            // Default debug keystore
+        create("debugConfig") {
+            storeFile = file("${rootDir}/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
         }
         create("release") {
             if (hasReleaseSigning) {
@@ -60,11 +63,14 @@ android {
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debugConfig")
+        }
         release {
             if (hasReleaseSigning) {
                 signingConfig = signingConfigs.getByName("release")
             } else {
-                signingConfig = signingConfigs.getByName("debug")
+                signingConfig = signingConfigs.getByName("debugConfig")
                 logger.warn("Release signing key is not configured. Falling back to debug signing for testing release build.")
             }
             isMinifyEnabled = true
@@ -82,41 +88,6 @@ android {
         unitTests.isReturnDefaultValues = true
     }
 
-    // Two distributions of the same app (identical applicationId):
-    //  - play: Google Play. The optional Office engine ships as the on-demand dynamic feature
-    //    module :office_engine (Play Feature Delivery); no native code is ever downloaded by the app.
-    //  - foss: GitHub/F-Droid-style sideload builds. The Office engine is downloaded on request
-    //    from a pinned, SHA-256 verified release; only this flavor declares INTERNET
-    //    (see src/foss/AndroidManifest.xml).
-    flavorDimensions += "distribution"
-    productFlavors {
-        create("play") {
-            dimension = "distribution"
-        }
-        create("foss") {
-            dimension = "distribution"
-        }
-    }
-    // AGP can't link a dynamic feature against ABI-split APK outputs, and the feature is only
-    // ever delivered through a Play bundle anyway — so register it for bundle builds only.
-    // APK builds (sideload/foss) simply don't contain it; the play installer then falls back.
-    if (gradle.startParameter.taskNames.any { it.contains("bundle", ignoreCase = true) }) {
-        dynamicFeatures += setOf(":office_engine")
-    }
-    // Bundling on-device OCR (bundled ML Kit + Tesseract4Android) added native .so libs for
-    // 4 CPU architectures; without splitting, every install carries all 4. This produces one
-    // APK per ABI (~1/4 the native-lib weight each) plus a universal fallback for sideloading.
-    // Play Store distribution via an Android App Bundle (`./gradlew bundleRelease`) already does
-    // this automatically and needs no config here — this `splits` block only matters for raw
-    // APK builds/installs (`assembleDebug`/`assembleRelease`, `installDebug`, sideloading).
-    splits {
-        abi {
-            isEnable = true
-            reset()
-            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
-            isUniversalApk = true
-        }
-    }
     packaging {
         resources {
             excludes += arrayOf(
@@ -142,10 +113,14 @@ android {
     lint {
         checkReleaseBuilds = false
     }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
 }
 
 kotlin {
-    jvmToolchain(17)
     compilerOptions {
         freeCompilerArgs.addAll(
             "-Xlambdas=class"
@@ -181,6 +156,8 @@ dependencies {
 
     // ML Kit Document Scanner & Camera
     implementation(libs.play.services.mlkit.scanner)
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
+    implementation("com.google.zxing:core:3.5.3")
     implementation(libs.camerax.core)
     implementation(libs.camerax.camera2)
     implementation(libs.camerax.lifecycle)
@@ -199,8 +176,7 @@ dependencies {
     // A real XmlPullParser for JVM tests; android.jar only carries stubs of it.
     testImplementation("net.sf.kxml:kxml2:2.3.0")
 
-    // Optional Office engine (powered by LibreOffice) — installer differs per distribution.
-    "playImplementation"(libs.play.feature.delivery.ktx)
-    "fossImplementation"(libs.androidx.work.runtime.ktx)
-    "fossImplementation"(libs.xz)
+    // Optional Office engine (powered by LibreOffice)
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.xz)
 }

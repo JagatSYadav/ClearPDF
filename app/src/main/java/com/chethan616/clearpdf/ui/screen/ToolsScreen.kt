@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.CallMerge
 import androidx.compose.material.icons.automirrored.rounded.CallSplit
 import androidx.compose.material.icons.automirrored.rounded.NoteAdd
+import androidx.compose.material.icons.rounded.Badge
 import androidx.compose.material.icons.rounded.BrandingWatermark
 import androidx.compose.material.icons.rounded.Collections
 import androidx.compose.material.icons.rounded.Compress
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.Numbers
 import androidx.compose.material.icons.rounded.PhotoSizeSelectLarge
+import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.Reorder
 import androidx.compose.material.icons.rounded.TextSnippet
 import androidx.compose.runtime.Composable
@@ -96,6 +98,8 @@ fun ToolsScreen(
     onNavigateToPageNumbers: () -> Unit = {},
     onNavigateToFlatten: () -> Unit = {},
     onNavigateToImageTools: () -> Unit = {},
+    onNavigateToIdCard: () -> Unit = {},
+    onNavigateToQrStudio: () -> Unit = {},
     // Web/HTML to PDF is hidden in the privacy-focused release — its only networked feature is URL
     // capture. The route and screen are kept; the entry point is simply not listed.
     @Suppress("UNUSED_PARAMETER") onNavigateToHtmlToPdf: () -> Unit = {},
@@ -129,6 +133,8 @@ fun ToolsScreen(
         ToolSection(
             stringResource(R.string.tools_section_convert),
             listOf(
+                ToolSpec("id_card", stringResource(R.string.id_card_composer_title), stringResource(R.string.id_card_composer_sub), LiquidGlassColors.Indigo, Icons.Rounded.Badge, onNavigateToIdCard),
+                ToolSpec("qr_studio", stringResource(R.string.qr_studio_title), stringResource(R.string.home_qr_studio_sub), LiquidGlassColors.Orange, Icons.Rounded.QrCodeScanner, onNavigateToQrStudio),
                 ToolSpec("images", stringResource(R.string.tool_images), stringResource(R.string.tool_images_sub), LiquidGlassColors.Indigo, Icons.Rounded.Image, onNavigateToImagesToPdf),
                 ToolSpec("pdf_to_images", stringResource(R.string.tool_pdf_to_images), stringResource(R.string.tool_pdf_to_images_sub), Color(0xFF00ACC1), Icons.Rounded.Collections, onNavigateToPdfToImages),
                 ToolSpec("extract", stringResource(R.string.tool_extract), stringResource(R.string.tool_extract_sub), Color(0xFF5AC8FA), Icons.Rounded.TextSnippet, onNavigateToExtractText),
